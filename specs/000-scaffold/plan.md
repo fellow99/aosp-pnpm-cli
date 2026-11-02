@@ -16,7 +16,7 @@
 | 项 | 值 | 证据 |
 |---|---|---|
 | Gradle | 9.4.1（CI `setup-gradle@v4` 钉版；本仓**无 wrapper**，开发机自备 9.4.x） | `wf:29-32` ✅ · `.gradle/9.4.1/` 缓存 ✅ |
-| AGP | 9.2.1（版本目录唯一条目，**零第三方库依赖**） | `gradle/libs.versions.toml:2,4` ✅ |
+| AGP | 9.2.1（版本目录唯一条目，**零第三方库依赖**） | `gradle/libs.versions.toml:2,5` ✅ |
 | 发布插件 | `com.vanniktech.maven.publish.base` 0.37.0（经 settings pluginManagement 加载） | `settings.gradle.kts:2-4` ✅ |
 | JDK | Temurin 21 | `wf:23-27` ✅ |
 | host 工具 | Node（ESM）+ bash；provision 仅 `node:fs/path/crypto/url` 四个内置模块，零第三方 | `provision.mjs:27-30` ✅ |
