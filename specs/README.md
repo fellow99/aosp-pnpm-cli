@@ -12,15 +12,16 @@
 
 ---
 
-## 一、文档总览
-
 | 层级 | 分类 | 文档数量 | 说明 |
 |---|---|---|---|
 | 整体 | 项目级顶层文档 | 5 | `constitution.md` · `ARCHITECTURE.md` · `TECH.md` · `STRUCTURE.md` · `SPECS_CHECKLIST.md` |
 | 整体 | 整体规格文档 | 3 | `overall-spec.md` · `overall-plan.md` · `overall-test-cases.md` |
-| 模块 | 000-scaffold（工程搭建） | 4 | `spec.md` · `plan.md`（本批新增）· `tasks.md` · `test-cases.md` |
+| 模块 | 000-scaffold（工程搭建） | 4 | `spec.md` · `plan.md` · `tasks.md` · `test-cases.md`（2026-11-03 增补模块边界与移交） |
+| 模块 | 001-building（构建） | 4 | spec/plan/tasks/test-cases（2026-11-03 立项，规划 §4 / M3.5-T1…T5） |
+| 模块 | 002-building-workflow（构建流水线） | 4 | spec/plan/tasks/test-cases（2026-11-03 立项，规划 §9/§10.1 / M3.5-T6） |
+| 模块 | 003-cli（CLI 本体） | 4 | spec/plan/tasks/test-cases（2026-11-03 立项，规划 §7/§7.1 / M3.5-T7；CLI 主用例 TC-C00…C16） |
 | 索引 | 本索引 | 1 | `README.md` |
-| **合计** | **2 目录 / 13 文件** | | 模块目录 1 个 |
+| **合计** | **6 目录 / 25 文件** | | 模块目录 4 个 |
 
 > **刻意不生成** `API.md` / `overall-api.md` / `overall-data-model.md`：本仓不含任何嵌入 API（AAR 无 Kotlin/Java 源）；唯一数据实体 `pnpm-cli.lock.json` 的逐字段模型在 [`000-scaffold/plan.md`](./000-scaffold/plan.md) §3。
 
@@ -61,17 +62,58 @@
 | 任务拆解 | [000-scaffold/tasks.md](./000-scaffold/tasks.md) | T1–T8 全部完成（既有件） |
 | 测试用例 | [000-scaffold/test-cases.md](./000-scaffold/test-cases.md) | TC-01…TC-05 与执行记录（2026-11-02，既有件） |
 
+
+### 001 — 构建 (`001-building`)
+
+> 2026-11-03 立项（规划 §10.2）：探针①②③ + fetch（钉版+sha256）+ cargo 交叉编译
+> （`aarch64-linux-android` + 16KB link-arg）+ llvm-strip + 门禁首产 + 元数据/依赖盘点。
+> C8（前提推翻即冻结）的执行现场。
+
+| 文档 | 链接 | 说明 |
+|---|---|---|
+| 功能规格 | [001-building/spec.md](./001-building/spec.md) | FR-001-001…032（探针/fetch/交叉编译/门禁首产，RFC 2119 + 可证伪判据） |
+| 技术方案 | [001-building/plan.md](./001-building/plan.md) | 工具链上下文、脚本接口设计（fetch/build/probe）、C8 冻结流程、FR 交叉引用 |
+| 任务拆解 | [001-building/tasks.md](./001-building/tasks.md) | T0–T8（探针前置 → fetch → build → 门禁 → 盘点 → 回写） |
+| 测试用例 | [001-building/test-cases.md](./001-building/test-cases.md) | TC-B01…B08（校验拒收/幂等/不改源/门禁正样本/元数据/lock 实值） |
+
+### 002 — 构建流水线 (`002-building-workflow`)
+
+> 2026-11-03 立项：CI 真实流水线（双 job：config-check 保留 + release 新增）、归档
+> `tar.gz + .sha256`、GitHub Release（两段式第一段）、lock 回写 runbook；承接 000 登记
+> 偏差修复（CI `bash -e` 缺陷、「M1」措辞 ×2）。
+
+| 文档 | 链接 | 说明 |
+|---|---|---|
+| 功能规格 | [002-building-workflow/spec.md](./002-building-workflow/spec.md) | FR-002-001…023（偏差修复/流水线编排/lock 回写/发布卫生） |
+| 技术方案 | [002-building-workflow/plan.md](./002-building-workflow/plan.md) | workflow 双 job 结构、退出码修复写法、lock 回写 runbook |
+| 任务拆解 | [002-building-workflow/tasks.md](./002-building-workflow/tasks.md) | T1–T8（先修偏差再扩展） |
+| 测试用例 | [002-building-workflow/test-cases.md](./002-building-workflow/test-cases.md) | TC-W01…W07（yaml 结构/bash -e 语义模拟/归档 sha256/draft→released 语义） |
+
+### 003 — CLI 本体 (`003-cli`)
+
+> 2026-11-03 立项：`libpnpm_cli.so` 在 Android 上的**命令行行为验证**——规划 §7.1 真机
+> 探针 P1–P7 可执行化 + CLI 主用例（测试载体：adb 直 exec + env 注入契约）。
+
+| 文档 | 链接 | 说明 |
+|---|---|---|
+| 功能规格 | [003-cli/spec.md](./003-cli/spec.md) | FR-003-001…032（基础行为/网络安装/store 契约/红线边界） |
+| 技术方案 | [003-cli/plan.md](./003-cli/plan.md) | 测试载体（部署点/env 注入/双 store 案）、P1–P7→用例映射、设计决策 |
+| 任务拆解 | [003-cli/tasks.md](./003-cli/tasks.md) | T0–T8（先载体后用例；红线用例必跑） |
+| 测试用例 | [003-cli/test-cases.md](./003-cli/test-cases.md) | **TC-C00…C16 CLI 主用例全集**（P1–P7 映射 + version/help/退出码/UTF-8/install/lifecycle/store/self-update/dlx/透传/流分离） |
 ---
 
 ## 四、模块编号一览
 
 | 编号 | 模块名 | 英文名 | 分类 | 规划出处 | 状态 |
 |---|---|---|---|---|---|
-| 000 | 工程搭建 | scaffold | 骨架 | 规划 §10（M0） | ✅ 已落地 |
-| — | Rust 交叉编译流水线 | （M3.5 接入，不新开编号） | 构建 | 规划 §4/§9/§10 | ⬜ 规划（M3.5） |
-| — | 发布（GitHub Release → Maven Central） | （两段式，随 M3.5/M4） | 发布 | 规划 §10.1 | ⬜ 规划 |
+| 000 | 工程搭建 | scaffold | 骨架 | 规划 §10（M0） | ✅ 已落地（FR 空间冻结，2026-11-03 登记移交） |
+| 001 | 构建 | building | 构建 | 规划 §4 / §10.2（M3.5-T1…T5） | ⬜ 规格已立（2026-11-03），待实现 |
+| 002 | 构建流水线 | building-workflow | 构建/发布 | 规划 §9 / §10.1 / §10.2（M3.5-T6） | ⬜ 规格已立（2026-11-03），待实现 |
+| 003 | CLI 本体 | cli | 运行期验证 | 规划 §7 / §7.1 / §10.2（M3.5-T7） | ⬜ 规格已立（2026-11-03），待执行 |
+| — | Maven Central 发布 | （两段式第二段） | 发布 | 规划 §10.1（M4） | ⬜ 规划（随 002 扩展，出现独立边界再编号） |
 
-> 编号约定：M3.5 里程碑工作在现有 `000-scaffold` 规格与规划 §10 任务表内推进，**不预建模块目录**；待出现独立可验收的模块边界时再按 `NNN-<名>` 扩展（C9：先改规划再改结构）。
+> 编号约定（2026-11-03 更新）：M3.5 里程碑工作已按规划 §10.2 拆分至 001/002/003 三个模块目录
+> （「出现独立可验收的模块边界即按 `NNN-<名>` 扩展」的首次执行）；M4 暂不拆分。
 
 ---
 

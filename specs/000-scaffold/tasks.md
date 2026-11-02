@@ -11,3 +11,11 @@
 - [x] T6 `.gitignore`（含 target/）/ THIRD-PARTY / README 中英（运行期依赖醒目声明）/ docs/000
 - [x] T7 specs（三件套）
 - [x] T8 验证（assembleDebug + provision 退出码 + 语法门）+ 提交（父工程不提交）
+
+## 移交登记（2026-11-03，规划 §10.2）
+
+M3.5 工作已拆分至新模块，本目录任务表（T1–T8）保持闭合不再追加：
+
+- → [001-building/tasks.md](../001-building/tasks.md)：探针①②③、fetch/交叉编译/strip 实现、门禁首产
+- → [002-building-workflow/tasks.md](../002-building-workflow/tasks.md)：真实 CI 流水线、`bash -e` 缺陷修复、lock 回写
+- → [003-cli/tasks.md](../003-cli/tasks.md)：真机回程 P1–P7、store 注入定案、测试计划

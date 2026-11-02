@@ -43,6 +43,17 @@
 
 > TC-EXT-01 以外均为工具契约的**可执行判据**，登记于此供 M3.5-T5 首产回归时逐条执行；当前因无产物/构造目录，未跑不构成缺口（C7：⬜ 如实标注）。
 
+### 2.2 新模块用例族（2026-11-03 立项，规划 §10.2 拆分）
+
+| 用例族 | 模块 | 覆盖 | 逐条清单 |
+|---|---|---|---|
+| TC-B01…B08 | 001-building（L1） | fetch 校验/幂等/不改源、门禁首产正样本、元数据、lock 回写实值 | [`001-building/test-cases.md`](./001-building/test-cases.md) |
+| TC-W01…W07 | 002-building-workflow（L3） | workflow 结构、`bash -e` 语义修复、措辞清零、归档 sha256、lock draft→released 语义、发布卫生、探针防线 | [`002-building-workflow/test-cases.md`](./002-building-workflow/test-cases.md) |
+| TC-C00…C16 | 003-cli（L4） | P1–P7 探针可执行化 + CLI 主用例（version/help/退出码/UTF-8/install/lifecycle/store/self-update/dlx/registry 透传/流分离） | [`003-cli/test-cases.md`](./003-cli/test-cases.md) |
+
+> TC-C 族即规划 §7.1 真机探针的**用例化落点**（P1→TC-C01、P2→TC-C06、P3→TC-C08、
+> P4→TC-C11、P5→TC-C10、P6→TC-C15、P7→TC-C05）；§3 索引表保留规划原文口径作对照。
+
 ---
 
 ## 3. 规划期真机探针索引（**规划引用**，规划 §7.1；⬜ 全部未实测）

@@ -27,3 +27,17 @@
 ## 3. 验收场景
 
 - 干净工程可配置；provision 未投放退出码 = 2；二进制不入库。
+
+## 4. 模块边界与移交（2026-11-03 登记，规划 §10.2）
+
+本模块（M0 骨架）已闭合：T1–T8 全部完成，TC-01…TC-05 通过（2026-11-02）。
+M3.5 工作自 2026-11-03 起拆分至三个新模块，本模块 FR 编号空间（FR-000-xxx）冻结：
+
+| 移交方向 | 内容 | 新模块 |
+|---|---|---|
+| → 001-building | 探针①②③执行、fetch/交叉编译/strip 真实实现、门禁首产正样本（TC-EXT-02~04 的产物侧） | [001-building/spec.md](../001-building/spec.md) |
+| → 002-building-workflow | CI `bash -e` 缺陷修复（FR-000-041 ⚠️）、「M1」措辞回写、真实流水线、lock 回写 | [002-building-workflow/spec.md](../002-building-workflow/spec.md) |
+| → 003-cli | 真机回程 P1–P7、store 注入 a/b 定案、self-update/R10 消费方文档口径 | [003-cli/spec.md](../003-cli/spec.md) |
+
+本模块保留职责：Gradle 骨架、lock 纪律（draft 语义）、provision 工具契约（退出码 0/2/1、
+七项门禁口径）、配置期 CI 门禁（FR-000-040/042 的**存在性**——其运行语义修复归 002）。
