@@ -83,3 +83,10 @@
 2. **P5 修正**：`self-update` 在可写 HOME+网络下**会真实运行期下载上游二进制**（首跑实测 23.55MB 下载启动；原产物不可被覆盖——sha256 不变）。D7 的「物理不可能」仅指生产 AAR 的 nativeLibraryDir 只读场景；**消费方文档必须显式声明：不得为 pnpm 提供可写 HOME + 网络的组合并依赖物理失败**。
 3. **R5 定案**：store 注入推荐**案b**（`pnpm config set store-dir`，显式、可 `store path` 回读、随 config.yaml 持久化）；案a（XDG_DATA_HOME）亦实测有效，作为无首启命令场景的兜底。
 4. **R6 初步结论**：TLS 直连 registry.npmjs.org 握手成功，无证书错误 ⇒ rustls webpki-roots 自带根证书，**无需** `npm_config_cafile` 注入（⬜ 正式结论随真机复测）。
+
+### App 探针执行记录（2026-11-04，probe-app 无人值守实测 ✅ 17 PASS + 2 BLOCKED + 0 FAIL）
+
+- 载体：probe-app（`adb install` + `am start` 自动跑全部 19 探针），报告 `probe-report.json`（device: sdk_gphone64_x86_64 API 37，**x86_64 + arm64 翻译层**——本会话实测 x86_64 主机无法启动 arm64 镜像（emulator 不支持跨架构 QEMU：`Avd's CPU Architecture 'arm64' is not supported on x86_64 host`），翻译层为可用最优环境，C7 如实记录）
+- 全部 PASS：C00（NLDIR 唯一原生件+size 落锁值）/ C00b（裸环境直启）/ C01/C01b（12.16.1 回程）/ C02 / C03（stderr 分流）/ C04（中文/emoji UTF-8 回程）/ C07（init）/ C08a+C09+C08b（**store 双案 App 内复验，R5 定案再证**）/ C05（TLS install）/ C06b（core-js 默认拦截）/ C14（esbuild 拦截非静默）/ **C10（self-update 后本体 sha256 前后一致——P5 红线在 App 场景实证）** / C11（dlx RECORD）/ C16（翻译层记录）
+- BLOCKED：C06a（node 缺件，aosp-node-cli 未首产）/ C15（无 16KB 设备，对齐已由门禁⑦保证）
+- 发布联动：全绿后打 tag `v12.16.1` → CI run 41733024700 success → **GitHub Release 生成**（https://github.com/fellow99/aosp-pnpm-cli/releases/tag/v12.16.1，tar.gz 22,719,556B + .sha256 双 assets）→ lock `status=released`（002-T6 runbook 收尾，**G1/G4 达成**）

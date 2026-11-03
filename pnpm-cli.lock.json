@@ -38,7 +38,7 @@
         "coordinates": "io.github.fellow99:pnpm-cli:12.16.1",
         "published": false
       },
-      "status": "draft"
+      "status": "released"
     }
   ],
   "matrix": {
