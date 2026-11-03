@@ -1,14 +1,29 @@
-name: CI (scaffold) — aosp-pnpm-cli
+name: CI — aosp-pnpm-cli
 
-# 000-scaffold 阶段的 CI 只做「配置期门禁」：
-#   - Gradle 配置/任务求值（无 .so 也必须通过 —— FR：二进制缺失不阻碍配置期）
-#   - provision.mjs 语法与退出码纪律自检（未投放 = 退出码 2 = 预期）
-# 真实的交叉编译 + 门禁 + Release 流水线在 M1 接入（替换本文件）。
+# 双 job 结构（specs/002-building-workflow/，规划 §9/§10.2）：
+#   config-check —— 配置期门禁（scaffold 三段保留，FR-000-040/042 不回退）：
+#     - Gradle 配置/任务求值（无 .so 也必须通过）
+#     - provision.mjs 退出码纪律（未投放 = 退出码 2 = 预期；修复历史 bash -e 语义缺陷：
+#       GitHub Actions run 默认 bash -e 使「先跑后取 $?」不可达——改 code=0; cmd || code=$?）
+#     - 脚本语法门
+#   release —— 真实流水线（仅 tag v<pnpmver> 或 dispatch 显式触发）：
+#     装机 → 探针结论检查 → fetch（钉版+sha256）→ 交叉编译+门禁 → 归档 → GitHub Release
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      pnpm-version:
+        description: 'pnpm version to build (default: read from pnpm-cli.lock.json)'
+        required: false
+        type: string
+      run-release:
+        description: 'Also run the release job (artifacts uploaded, no GitHub Release unless on tag)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -35,16 +50,127 @@ jobs:
         run: gradle :pnpm-cli:tasks --console=plain
 
       - name: provision.mjs syntax + exit-code discipline
+        shell: bash
         run: |
           node --check tools/provision.mjs
           # 未投放产物时 --check 的预期退出码是 2（未投放），其它非零码视为工具缺陷。
-          node tools/provision.mjs --check
-          code=$?
+          # 写法说明：run 默认 bash -e 下裸命令以 2 退出会立即失败 step，
+          # 必须用 || 捕获再断言（FR-002-001，修复 FR-000-041 的语义缺陷）。
+          code=0
+          node tools/provision.mjs --check || code=$?
           if [ "$code" -ne 2 ]; then
-            echo "provision --check 退出码=$code（预期 2=未投放）"; exit 1
+            echo "::error::provision --check exit=$code (expected 2 = not provisioned)"
+            exit 1
           fi
 
       - name: scripts syntax
         run: |
           node --check scripts/fetch-pnpm-cli-source.mjs
           bash -n scripts/build-pnpm-cli-android.sh
+          bash -n scripts/package-release-artifacts.sh
+
+  release:
+    # 仅 tag v<pnpmver> push，或 dispatch 显式要求（本地等价验证用）
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && inputs.run-release)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: write # GitHub Release 上传（仅本 job）
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve pnpm version + expected sha256（从 lock 读期望值，不硬编码）
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VER="${GITHUB_REF_NAME#v}"
+          elif [ -n "${{ inputs.pnpm-version }}" ]; then
+            VER="${{ inputs.pnpm-version }}"
+          else
+            VER="$(node -p "require('./pnpm-cli.lock.json').active.version")"
+          fi
+          SHA="$(node -p "const l=require('./pnpm-cli.lock.json'); const r=(l.releases||[]).find(x=>x.version==='$VER'); r?.builtFrom?.sourceSha256 || ''")"
+          if [ -z "$SHA" ]; then
+            echo "::error::lock has no builtFrom.sourceSha256 for $VER (fetch discipline: pin before download)"
+            exit 1
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+          echo "[release] pnpm=$VER source sha256=$SHA"
+
+      - name: openProbes gate（探针①② 闭环、③ 未触发才许 release；C8 流水线防线）
+        run: |
+          node -e '
+            const l = require("./pnpm-cli.lock.json");
+            const probes = l.releases[0].openProbes.map(s => s.toLowerCase());
+            const closed1 = probes[0].includes("closed");
+            const probe2 = probes[1] || "";
+            const napiHard = probe2.includes("napi hard dependency confirmed");
+            const frozen = probe2.includes("frozen") || probes[2].includes("triggered");
+            if (!closed1) { console.error("::error::openProbes[0] (upstream prebuilt) not CLOSED"); process.exit(1); }
+            if (napiHard || frozen) { console.error("::error::C8 freeze condition recorded in openProbes - release forbidden"); process.exit(1); }
+            console.log("[release] openProbes gate OK (probe1 closed, no freeze)");
+          '
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Rust 1.97.0（上游 rust-toolchain.toml 钉版线）+ android target
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.97.0'
+          targets: aarch64-linux-android
+
+      - name: Install cargo-ndk + cargo-license（钉版）
+        run: |
+          cargo install cargo-ndk --locked --version 4.1.2
+          cargo install cargo-license --locked --version 0.7.0
+
+      - name: Set up Android NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" --version | head -1
+
+      - name: fetch（钉版 tarball + sha256 校验，C1 不改源）
+        run: node scripts/fetch-pnpm-cli-source.mjs --pnpm "${{ steps.ver.outputs.version }}" --sha256 "${{ steps.ver.outputs.sha256 }}"
+
+      - name: cross build + strip + provision gate（16KB link-arg；七项门禁任一不过即失败）
+        run: |
+          bash scripts/build-pnpm-cli-android.sh \
+            --pnpm "${{ steps.ver.outputs.version }}" \
+            --api 24 \
+            --src .dist/src/pnpm-src \
+            --ndk "$ANDROID_NDK_HOME" \
+            --out .dist/out
+
+      - name: package archive（tar.gz + .sha256，FR-002-013 清单）
+        run: |
+          bash scripts/package-release-artifacts.sh \
+            --pnpm "${{ steps.ver.outputs.version }}" \
+            --dist .dist/out \
+            --out .dist/release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pnpm-cli-v${{ steps.ver.outputs.version }}-android-arm64-v8a
+          path: .dist/release/
+
+      - name: GitHub Release（两段式第一段；仅在 tag 上创建）
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: .dist/release/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true

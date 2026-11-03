@@ -17,3 +17,11 @@
 ## 执行记录
 
 （开发阶段回填）
+
+## 执行记录（2026-11-03，开发阶段）
+
+- TC-B01 ✅：fetch v12.16.1（sha256=baaffdb2…2322c 期望校验通过）exit 0；`.dist/src/pnpm-src/Cargo.toml` 存在；FETCH-METADATA.json 字段完整。
+- TC-B02 ✅：`--sha256 000…0` ⇒ exit 2，stderr 含「SHA-256 校验失败（拒收）」，目标目录未产生。
+- TC-B03 ✅：二次 fetch ⇒ 「已存在且版本一致」exit 0（幂等命中）。
+- 实现注记：解压用**纯 Node tar 解析器**（zlib + 512B 头 + pax path）——Windows 下 GNU tar 把 `D:\` 解释为远程主机、bsdtar 对 tarball 内 symlink 报 Can't create（无特权建链）；自解器跳过 symlink/hardlink（本次 6 个，均为上游 .claude/fixtures 装饰链接，不参与构建），清单记录于 FETCH-METADATA.json `skippedLinks`（C1 可审计）。
+- TC-B04…B08：⬜ 待交叉编译完成（cargo-ndk 安装中）。

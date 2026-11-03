@@ -5,8 +5,9 @@
 - **pnpm**（`libpnpm_cli.so` 本体，pnpm 12+ Rust 独立二进制）—— MIT License：
   https://github.com/pnpm/pnpm/blob/main/LICENSE
 - **Rust 标准库 / 工具链产物**—— MIT OR Apache-2.0
-- 主要 Rust 依赖（tokio、ring?、reqwest? 等，以 M1 依赖可编性探针结论为准）——各自许可，
-  完整清单（cargo license 报告）随 GitHub Release 归档分发
+- 主要 Rust 依赖（tokio、reqwest/rustls 等；**探针② 2026-11-03 初步结论：pnpm-cli bin
+  零 napi 依赖，上游自身以 cross+NDK r25b 分发 android-arm64**）——各自许可，
+  完整清单（cargo license 报告，构建时生成于 LICENSES-cargo.txt）随 GitHub Release 归档分发
 - **node**（运行期依赖，不随包于本 AAR）——由 `io.github.fellow99:node-cli` 供给，MIT
 
 纪律：

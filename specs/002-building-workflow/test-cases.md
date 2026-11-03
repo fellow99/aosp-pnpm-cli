@@ -16,3 +16,10 @@
 ## 执行记录
 
 （开发阶段回填；GitHub 远端运行记录 ⬜ 随 push tag 后观察补充）
+
+## 执行记录（2026-11-03，开发阶段——本地静态面）
+
+- TC-W01 ✅：workflow 结构断言全过（双 job / tag `v*` 触发 / dispatch / 权限分离 contents: read→write / 修复写法 / 装机清单 / fetch→build→归档→Release 步骤链）。
+- TC-W02 ✅：`bash -e` 语义模拟——修复写法下 exit 2 被 `|| code=$?` 捕获且断言通过（step 成功）；exit 1 ⇒ step 失败；**对照旧写法 exit 2 必失败（缺陷实证）**。
+- TC-W03 ✅：`grep -rn "M1" .github/workflows/ pnpm-cli/THIRD-PARTY-NOTICES.md` 无残留（THIRD-PARTY-NOTICES 已更新为探针②初步结论口径）。
+- TC-W04…W07：⬜ 待首产物（W04/W05 依赖 001 产出；W06/W07 随 workflow 定稿跑）。GitHub 远端运行记录 ⬜（push 后观察）。
