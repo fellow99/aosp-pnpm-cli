@@ -87,7 +87,10 @@ echo "[build] cargo-ndk=$CARGO_NDK_VER"
 mkdir -p "$OUT"
 OUT_FWD="$OUT"; SRC_FWD="$SRC"
 command -v cygpath >/dev/null 2>&1 && { OUT_FWD="$(cygpath -u "$OUT")"; SRC_FWD="$(cygpath -u "$SRC")"; }
-TARGET_DIR="$OUT_FWD/target"
+# TARGET_DIR 必须绝对化：构建子 shell 会 cd 进源码树，相对路径会把 target
+# 落到 <源码树>/…/target（CI 首跑实证的产物路径错位根因）
+TARGET_DIR="$(cd "$OUT_FWD" && pwd)/target"
+echo "[build] target-dir=$TARGET_DIR"
 
 # —— ① 依赖盘点（快路径）：Cargo.lock 副本 + 整文件 sha256（粒度 a，规划 §4.2）——
 # cargo license 清单在构建成功后跑（③）——其 cargo metadata 解析含 git 依赖较慢，
