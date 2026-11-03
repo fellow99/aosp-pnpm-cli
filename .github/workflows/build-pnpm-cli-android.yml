@@ -6,8 +6,11 @@ name: CI — aosp-pnpm-cli
 #     - provision.mjs 退出码纪律（未投放 = 退出码 2 = 预期；修复历史 bash -e 语义缺陷：
 #       GitHub Actions run 默认 bash -e 使「先跑后取 $?」不可达——改 code=0; cmd || code=$?）
 #     - 脚本语法门
-#   release —— 真实流水线（仅 tag v<pnpmver> 或 dispatch 显式触发）：
-#     装机 → 探针结论检查 → fetch（钉版+sha256）→ 交叉编译+门禁 → 归档 → GitHub Release
+#   release —— 真实流水线：
+#     main push 也跑完整构建验证（首产验证期；artifact 上传但**不**创建 Release）；
+#     GitHub Release 仅在 tag v<pnpmver> 上创建（两段式第一段，前置探针闭环）；
+#     PR 不跑（避免每 PR 40 分钟重构建）。
+#     步骤链：装机 → 探针结论检查 → fetch（钉版+sha256）→ 交叉编译+门禁 → 归档
 on:
   push:
     branches: [main]
@@ -68,25 +71,30 @@ jobs:
           node --check scripts/fetch-pnpm-cli-source.mjs
           bash -n scripts/build-pnpm-cli-android.sh
           bash -n scripts/package-release-artifacts.sh
+          bash -n scripts/deploy-cli-to-device.sh
 
   release:
-    # 仅 tag v<pnpmver> push，或 dispatch 显式要求（本地等价验证用）
+    # main push 也跑完整构建验证（首产验证期；artifact 上传但**不**创建 Release）；
+    # GitHub Release 仅在 tag v<pnpmver> 上创建（两段式第一段，前置探针闭环）；
+    # PR 不跑（避免每 PR 40 分钟重构建）
     if: >-
       startsWith(github.ref, 'refs/tags/v') ||
+      github.ref == 'refs/heads/main' ||
       (github.event_name == 'workflow_dispatch' && inputs.run-release)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
-      contents: write # GitHub Release 上传（仅本 job）
+      contents: write # GitHub Release 上传（仅本 job，且仅 tag 触发时用到）
     steps:
       - uses: actions/checkout@v4
 
       - name: Resolve pnpm version + expected sha256（从 lock 读期望值，不硬编码）
         id: ver
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
+          # tag push → 取 tag 名（去 v 前缀）；其余（main push / dispatch 未指版本）→ lock active
+          if [ "${{ github.event_name }}" = "push" ] && [[ "$GITHUB_REF_NAME" == v* ]]; then
             VER="${GITHUB_REF_NAME#v}"
-          elif [ -n "${{ inputs.pnpm-version }}" ]; then
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.pnpm-version }}" ]; then
             VER="${{ inputs.pnpm-version }}"
           else
             VER="$(node -p "require('./pnpm-cli.lock.json').active.version")"
@@ -100,7 +108,7 @@ jobs:
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
           echo "[release] pnpm=$VER source sha256=$SHA"
 
-      - name: openProbes gate（探针①② 闭环、③ 未触发才许 release；C8 流水线防线）
+      - name: openProbes gate（探针①② 闭环、③ 未触发才许构建/发布；C8 流水线防线）
         run: |
           node -e '
             const l = require("./pnpm-cli.lock.json");
@@ -110,7 +118,7 @@ jobs:
             const napiHard = probe2.includes("napi hard dependency confirmed");
             const frozen = probe2.includes("frozen") || probes[2].includes("triggered");
             if (!closed1) { console.error("::error::openProbes[0] (upstream prebuilt) not CLOSED"); process.exit(1); }
-            if (napiHard || frozen) { console.error("::error::C8 freeze condition recorded in openProbes - release forbidden"); process.exit(1); }
+            if (napiHard || frozen) { console.error("::error::C8 freeze condition recorded in openProbes - build/release forbidden"); process.exit(1); }
             console.log("[release] openProbes gate OK (probe1 closed, no freeze)");
           '
 
