@@ -72,7 +72,7 @@ STRIP_BIN="$NDK/toolchains/llvm/prebuilt/$HOST_TAG/bin/llvm-strip"
 # —— env 自检（缺件 exit 2：构建输入不可用）——
 command -v rustc >/dev/null 2>&1 || fail2 "rustc 不在 PATH（rustup stable 已装？）"
 command -v cargo >/dev/null 2>&1 || fail2 "cargo 不在 PATH"
-command -v cargo ndk >/dev/null 2>&1 || command -v cargo-ndk >/dev/null 2>&1 || fail2 "cargo-ndk 未安装（cargo install cargo-ndk）"
+command -v cargo-ndk >/dev/null 2>&1 || fail2 "cargo-ndk 未安装（cargo install cargo-ndk）"
 command -v node >/dev/null 2>&1 || fail2 "node 不在 PATH（provision 门禁需要）"
 [[ -f "$SRC/Cargo.toml" ]] || fail2 "源码树缺失 Cargo.toml: $SRC（先跑 fetch 脚本）"
 [[ -d "$NDK" ]] || fail2 "NDK 目录不存在: $NDK"
@@ -118,12 +118,14 @@ RAW_BIN="$TARGET_DIR/aarch64-linux-android/release/pnpm"
 RUSTC_ACTUAL="$(cd "$SRC_FWD" && rustc --version | head -1)"
 echo "[build] rustc(实际生效)=$RUSTC_ACTUAL"
 
-# —— ③ 依赖许可清单（构建后跑：registry 缓存就绪；180s 超时防网络挂起）——
+# —— ③ 依赖许可清单（构建后跑：registry 缓存就绪；300s 超时防网络挂起）——
+# 失败时删除空文件 ⇒ package 清单核对必失败（不静默进归档；G2 纪律）
 echo "[build] cargo license 清单 …"
 if ( cd "$SRC_FWD" && timeout 300 cargo license --avoid-dev-deps > "$OUT_FWD/LICENSES-cargo.txt" 2>"$OUT_FWD/.license-err.log" ); then
   echo "[build] 许可清单: $OUT/LICENSES-cargo.txt"
 else
-  echo "[build] ⚠ cargo-license 失败/超时（不阻塞产物；归档前需补跑）" >&2
+  rm -f "$OUT_FWD/LICENSES-cargo.txt"
+  echo "[build] ✘ cargo-license 失败/超时（空清单已删除；package 将按缺件硬失败，错误日志 $OUT/.license-err.log）" >&2
 fi
 
 # —— ④ strip（llvm-strip --strip-unneeded）→ libpnpm_cli.so ——

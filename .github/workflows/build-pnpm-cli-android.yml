@@ -112,7 +112,8 @@ jobs:
         run: |
           node -e '
             const l = require("./pnpm-cli.lock.json");
-            const probes = l.releases[0].openProbes.map(s => s.toLowerCase());
+            const rel = (l.releases || []).find(r => r.version === "${{ steps.ver.outputs.version }}") || l.releases[0];
+            const probes = rel.openProbes.map(s => s.toLowerCase());
             const closed1 = probes[0].includes("closed");
             const probe2 = probes[1] || "";
             const napiHard = probe2.includes("napi hard dependency confirmed");

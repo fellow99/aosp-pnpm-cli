@@ -194,7 +194,7 @@ function main() {
   const active = { version: rel.version, abi: rel.abi, name: rel.name || DEFAULT_BINARY };
 
   say(`目标 release：version=${rel.version} abi=${rel.abi}（${rel.pairedRuntime?.coordinates ?? '无配对信息'}）`);
-  if (rel.status === 'draft') say('⚠ lock 中该 release 为 draft：sha/size 无锁值，仅记录不比对');
+  if (rel.status === 'draft') say('⚠ lock 中该 release 为 draft：首产实值已回写（⑤⑥ 按实值比对生效）；status=released 翻转待 GitHub Release');
 
   const inspectPath = argOf('--inspect');
   if (inspectPath) {

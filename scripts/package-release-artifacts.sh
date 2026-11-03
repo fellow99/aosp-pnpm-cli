@@ -51,6 +51,8 @@ fi
 for f in "${REQUIRED[@]}"; do
   [[ -f "$DIST/$f" ]] || fail2 "归档缺件: $DIST/$f"
 done
+# 评审加固：许可清单不得为空文件（cargo-license 失败时 build 只告警，此处拦住空清单进归档）
+[[ -s "$DIST/LICENSES-cargo.txt" ]] || fail2 "LICENSES-cargo.txt 为空（cargo-license 未产出有效清单，G2 判据不满足）"
 
 # —— 组装 ——
 STAGE="$OUT/stage/pnpm-cli-v${PNPMVER}-android-arm64-v8a"

@@ -64,10 +64,12 @@ function readLockSourceSha(ver) {
 }
 
 async function download(url, dest) {
-  const res = await fetch(url, { redirect: 'follow' });
+  // 评审加固：下载 5 分钟超时（防无限挂起）；写盘错误即拒收（exit 2 而非 uncaught）
+  const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(300_000) });
   if (!res.ok || !res.body) die(2, [`[fetch] 下载失败: HTTP ${res.status} ${url}`]);
   const hash = crypto.createHash('sha256');
   const out = fs.createWriteStream(dest);
+  out.on('error', (e) => die(2, [`[fetch] 写盘失败（拒收）: ${e.message}`]));
   for await (const chunk of res.body) {
     hash.update(chunk);
     out.write(chunk);
@@ -90,12 +92,17 @@ function parseTarHeader(buf) {
 }
 
 async function extractTarGz(tarGzPath, destDir) {
+  // 状态机说明（评审加固 2026-11-03）：
+  //  - buf 永远只做「追加 + 头部消费」，任何挂起态都不得清空/替换 buf——
+  //    残余字节留在 buf 里等下一个 chunk 追加（旧实现的 pad-only/rest 会丢字节）；
+  //  - pending 仅两种：'file'（写文件 + pad）、'consume'（纯跳过 N 字节，pax/skip 用）；
+  //  - paxPath 在每条头处理完毕后统一清理，避免覆盖路径残留污染后续条目。
   const skipped = [];
   const gunzip = zlib.createGunzip();
   fs.createReadStream(tarGzPath).pipe(gunzip);
   const HEADER = 512;
   let buf = Buffer.alloc(0);
-  let pending = null; // { name, size, typeflag, consumed }
+  let pending = null; // { type:'file', name, size } | { type:'consume', need } | null
   let paxPath = null;
   let stripPrefix = null;
 
@@ -110,22 +117,8 @@ async function extractTarGz(tarGzPath, destDir) {
     return name;
   };
 
-  const consume = (head) => {
-    // 进入一条目：分类处理；数据区由外层按 size 消费
-    const type = head.typeflag;
-    if (type === 'g') return 'skip'; // pax global header
-    if (type === 'x') return 'pax';
-    if (type === '5') { // 目录
-      fs.mkdirSync(path.join(destDir, resolveName(head.name)), { recursive: true });
-      return 'done';
-    }
-    if (type === '0' || type === '\0' || type === '7') return 'file';
-    skipped.push(`${type}:${head.name}`); // '1' hardlink / '2' symlink / 其他
-    return 'skip';
-  };
-
   for await (const chunk of gunzip) {
-    buf = pending && pending.buf ? Buffer.concat([pending.buf, chunk]) : Buffer.concat([buf, chunk]);
+    buf = Buffer.concat([buf, chunk]);
     for (;;) {
       if (pending && pending.type === 'file') {
         if (buf.length < pending.size) break;
@@ -134,44 +127,49 @@ async function extractTarGz(tarGzPath, destDir) {
         if (!target.startsWith(destDir + path.sep)) throw new Error(`tar 路径逃逸: ${name}`);
         fs.mkdirSync(path.dirname(target), { recursive: true });
         fs.writeFileSync(target, buf.subarray(0, pending.size));
-        paxPath = null;
-        buf = buf.subarray(pending.size);
+        buf = buf.subarray(pending.size); // 文件数据必须从流中扣除（漏扣 ⇒ pad 消费吃掉数据，整体错位）
         const pad = (512 - (pending.size % 512)) % 512;
-        if (buf.length < pad) { pending = { type: 'pad-only', size: 0, buf: buf.subarray(0, 0), need: pad, rest: buf }; break; }
-        buf = buf.subarray(pad);
+        pending = pad > 0 ? { type: 'consume', need: pad } : null;
+      } else if (pending && pending.type === 'consume') {
+        if (buf.length < pending.need) break;
+        buf = buf.subarray(pending.need);
         pending = null;
       } else if (pending && pending.type === 'pax') {
         if (buf.length < pending.size) break;
         const body = buf.subarray(0, pending.size).toString('utf8');
         const m = body.match(/^\d+ path=([^\n]*)\n/m);
         if (m) paxPath = m[1];
-        buf = buf.subarray(pending.size);
         const pad = (512 - (pending.size % 512)) % 512;
-        if (buf.length < pad) { pending = { type: 'pad-only', need: pad, rest: buf }; break; }
-        buf = buf.subarray(pad);
-        pending = null;
-      } else if (pending && pending.type === 'pad-only') {
-        if (buf.length < pending.need) break;
-        buf = buf.subarray(pending.need);
-        pending = null;
-      }
-      if (buf.length < HEADER) break;
-      if (buf[0] === 0) { buf = Buffer.alloc(0); break; } // 结尾全零块
-      const head = parseTarHeader(buf.subarray(0, HEADER));
-      buf = buf.subarray(HEADER);
-      const kind = consume(head);
-      if (kind === 'file') pending = { type: 'file', name: head.name, size: head.size };
-      else if (kind === 'pax') pending = { type: 'pax', name: head.name, size: head.size };
-      else if (kind === 'skip') {
-        // 消费其数据区（symlink 头后无数据块，但 x/g 有；'1'/'2' 无数据）
-        if (head.size > 0) {
-          const pad = (512 - (head.size % 512)) % 512;
-          const total = head.size + pad;
-          if (buf.length < total) { pending = { type: 'pad-only', need: total - buf.length, skip: head.size, rest: buf }; buf = Buffer.alloc(0); break; }
-          buf = buf.subarray(total);
+        pending = pad > 0 ? { type: 'consume', need: pad } : null;
+      } else {
+        if (buf.length < HEADER) break;
+        if (buf[0] === 0) { buf = Buffer.alloc(0); break; } // 结尾全零块
+        const head = parseTarHeader(buf.subarray(0, HEADER));
+        buf = buf.subarray(HEADER);
+        const pad = (512 - (head.size % 512)) % 512;
+        const type = head.typeflag;
+        const px = paxPath;
+        paxPath = null; // 每条头处理后统一清理（含目录/skip 分支）
+        if (type === 'g') {
+          if (head.size > 0) pending = { type: 'consume', need: head.size + pad };
+        } else if (type === 'x') {
+          // pax extended header：解析 path= 记录，应用到紧随的下一条目
+          if (buf.length < head.size) { pending = { type: 'pax', size: head.size }; continue; }
+          const body = buf.subarray(0, head.size).toString('utf8');
+          buf = buf.subarray(head.size); // body 必须从流中扣除（漏扣 ⇒ 后续整体错位）
+          const m = body.match(/^\d+ path=([^\n]*)\n/m);
+          if (m) paxPath = m[1];
+          pending = pad > 0 ? { type: 'consume', need: pad } : null;
+        } else if (type === '5') {
+          fs.mkdirSync(path.join(destDir, resolveName(px ?? head.name)), { recursive: true });
+        } else if (type === '0' || type === '\0' || type === '7') {
+          pending = { type: 'file', name: head.name, size: head.size };
+        } else {
+          // '1' hardlink / '2' symlink / 其他：跳过并记录（构建无关件）
+          skipped.push(`${type}:${head.name}`);
+          if (head.size > 0) pending = { type: 'consume', need: head.size + pad };
         }
       }
-      // kind === 'done'（目录）：无数据区，继续
     }
   }
   if (pending && pending.type === 'file') throw new Error(`tar 数据不完整（条目 ${pending.name}）`);
@@ -198,10 +196,16 @@ if (fs.existsSync(srcDir) && fs.existsSync(metaPath)) {
     const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
     if (meta.version === pnpmver && meta.sha256 && fs.existsSync(path.join(srcDir, 'Cargo.toml'))) {
       const note = expectSha && meta.sha256 !== expectSha
-        ? `（警告：实测 ${meta.sha256} ≠ 期望 ${expectSha}，如需强制重取请删除 ${srcDir}）`
+        ? `（实测 ${meta.sha256} ≠ 期望 ${expectSha} ⇒ 本地结果不可信，重新获取）`
         : '';
-      console.log(`[fetch] 已存在且版本一致: pnpm ${pnpmver} @ ${srcDir} ${note}`);
-      process.exit(0);
+      if (note) {
+        // 评审加固（FR-001-011）：幂等快路径不得绕过 SHA-256 拒收契约——
+        // 期望哈希存在且与本地元数据不符 ⇒ 落入下方正常下载/校验流程重取
+        console.log(`[fetch] 本地结果与期望哈希不一致: ${note}`);
+      } else {
+        console.log(`[fetch] 已存在且版本一致: pnpm ${pnpmver} @ ${srcDir}`);
+        process.exit(0);
+      }
     }
   } catch { /* 元数据损坏则重取 */ }
 }
@@ -213,6 +217,7 @@ let actualSha;
 try {
   actualSha = await download(url, tmpTar);
 } catch (e) {
+  fs.rmSync(tmpTar, { force: true });
   die(2, [`[fetch] 下载异常（拒收）: ${e.message}`]);
 }
 const size = fs.statSync(tmpTar).size;

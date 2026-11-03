@@ -24,8 +24,8 @@
 | 编号 | 级别 | 需求 | 可证伪的验收判据 |
 |---|---|---|---|
 | FR-002-010 | MUST | runner 装机清单：rustup stable + `aarch64-linux-android` target + cargo-ndk（钉版）+ NDK（对齐线）+ JDK 21 + Node 20 + curl/file/tar + 许可清单工具（cargo-license/cargo-about 择一） | workflow 装机步骤逐项在位；工具版本可从 run log 复核 |
-| FR-002-011 | MUST | 触发：tag `v<pnpmver>` push 或 workflow_dispatch；`contents: read` 最小权限（Release 步骤按需提权） | push 普通 commit **不**触发 release job；config-check job 保持 push/PR 触发 |
-| FR-002-012 | MUST | 步骤链：resolve version → fetch（钉版+sha256）→ cargo license 清单 → cross build（16KB link-arg）→ strip → `provision --inspect` 全门禁 → 归档 → Release → artifact 上传 | 步骤顺序与规划 §9 一致；任一步失败即流水线失败（无「警告后继续」） |
+| FR-002-011 | MUST | 触发：release job 在 tag `v<pnpmver>` push、**main push（首产验证期，artifact-only，不创建 GitHub Release）** 或 dispatch 显式触发时运行；`contents: read` 最小权限（Release 步骤按需提权） | tag/main/dispatch 三分支可从 run 触发记录核验；GitHub Release 对象仅在 tag 上产生 |
+| FR-002-012 | MUST | 步骤链：resolve version → fetch（钉版+sha256）→ cross build（16KB link-arg）→ strip → `provision --inspect` 全门禁 → cargo license 清单 → 归档 → Release → artifact 上传（license 移至构建后：其 metadata 解析含 git 依赖较慢，不阻塞产物门禁；失败⇒归档硬失败） | 步骤顺序与 CI run 41568096296 实测一致；任一步失败即流水线失败（无「警告后继续」） |
 | FR-002-013 | MUST | 归档物：`pnpm-cli-v<ver>-android-arm64-v8a.tar.gz`（libpnpm_cli.so + BUILD-METADATA + FETCH-METADATA + LICENSES + cargo 依赖许可清单 + Cargo.lock 副本）+ 旁挂 `.sha256` | 归档内容清单逐项在位（G2）；`.sha256` 与 tar.gz 实测一致 |
 | FR-002-014 | MUST | 配置期门禁**保留**（scaffold CI 的 config-check job：无 .so 时 `gradle :pnpm-cli:tasks` 必过；宪法变更流程 4） | 替换/扩展后 config-check job 仍在且语义不变（FR-000-040 不回退） |
 | FR-002-015 | SHOULD | cargo 缓存策略（registry/git/target）：首轮耗时实测后定；未定前不强求 | 缓存策略结论登记（做/不做+理由）于本模块 plan |
