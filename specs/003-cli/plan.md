@@ -12,8 +12,9 @@
 
 | 项 | 取值 | 状态 |
 |---|---|---|
-| 被测件 | `.dist/out/libpnpm_cli.so`（001 首产） | ⬜ 依赖 001 |
+| 被测件 | `.dist/out/libpnpm_cli.so`（001 首产） | ✅ 已落锁（size=47317088/sha256=e5378cfa…，provision 投放/`--check` exit 0 实测） |
 | 设备 | 真机（adb devices 有实体）或模拟器；当前会话探测：`emulator-5554`（API 37，x86_64，abilist 含 arm64-v8a——arm64 走翻译） | ✅ 已探测 |
+| 载体补充（App 探针） | **`probe-app/`**（2026-11-03 新增，参考 aosp-python-cli/probe-app）：独立 Gradle 工程依赖容器 AAR（`app/libs/pnpm-cli-release.aar`，不入库），MainActivity 按规划 §7 注入 HOME/TMPDIR/XDG/PATH/LD_LIBRARY_PATH 后 ProcessBuilder exec NLDIR 本体，TC-C00…C16 逐条 PASS/FAIL/BLOCKED + JSON 报告（filesDir/probe-report.json，adb pull 取回）；D8 纯二进制无 assets 物化；TC-C10 判据＝sha256 前后比对（P5 实测口径）；TC-C07 init 用独立目录防覆盖 | ✅ 已实现（APK 构建通过；测试待指令） |
 | 部署点 | `/data/local/tmp/pnpm-cli/libpnpm_cli.so`（chmod 755；shell 域允许 exec） | ⬜ |
 | HOME/TMPDIR | `/data/local/tmp/pnpm-cli/home`、`/data/local/tmp/pnpm-cli/tmp`（filesDir 语义等价：可写、非库目录） | ⬜ |
 | store 注入 | 方式 a：`XDG_DATA_HOME=/data/local/tmp/pnpm-cli/xdg`；方式 b：`pnpm config set store-dir`（P3 双案实测后定案回写规划 §7） | ⬜ |

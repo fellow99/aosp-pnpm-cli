@@ -1,0 +1,5 @@
+# 构建产物与本地配置不入库（C3）
+build/
+.gradle/
+local.properties
+app/libs/*.aar

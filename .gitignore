@@ -29,3 +29,6 @@ target/
 
 # OS
 .DS_Store
+
+# provision 投放生成的版本元数据（provisionedAt 时间戳，非可复现产物，不入库）
+pnpm-cli/src/main/resources/META-INF/pnpm-cli.properties
