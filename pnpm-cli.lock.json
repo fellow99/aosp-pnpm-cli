@@ -1,27 +1,28 @@
 {
   "$comment": "pnpm-cli single source of truth: version = upstream pnpm version (independent semver). Binaries are NOT committed; CI builds libpnpm_cli.so and tools/provision.mjs deploys it. The current entry is a DRAFT placeholder: size/sha256 are pinned by the first real CI build. See docs/000-工程规划.md. Decision record (2026-10-30): pnpm 12+ is a Rust standalone binary; repo created on that basis (workspace doc §9.3).",
   "active": {
-    "version": "12.0.0",
+    "version": "12.16.1",
     "abi": "arm64-v8a"
   },
   "releases": [
     {
-      "version": "12.0.0",
+      "version": "12.16.1",
       "abi": "arm64-v8a",
       "androidApi": 24,
       "name": "libpnpm_cli.so",
       "size": 0,
       "sha256": "",
       "builtFrom": {
-        "source": "pnpm <ver> source tarball (github.com/pnpm/pnpm), unmodified; Rust standalone binary cross-compile",
-        "toolchain": "rust aarch64-linux-android target (tier2) + cargo-ndk",
+        "source": "pnpm 12.16.1 source tarball (github.com/pnpm/pnpm tag v12.16.1), unmodified; Rust standalone binary cross-compile",
+        "sourceSha256": "baaffdb2671a414882d13379d978339a58a9e66fe099f1f00f05a47b6232322c",
+        "toolchain": "rust 1.97.0 (upstream rust-toolchain.toml pin) + aarch64-linux-android target (tier2) + cargo-ndk",
         "runtimeDeps": "node must be on PATH (package lifecycle scripts are JS, executed by node) - consumer pairs with io.github.fellow99:node-cli",
         "ndk": "TBD (first CI build pins NDK line + version)",
         "flags": "TBD: -C link-arg=-Wl,-z,max-page-size=16384; strip"
       },
       "openProbes": [
-        "upstream android-arm64 prebuilt availability (esbuild/biome-style optionalDependencies: most likely absent) - CI self-build regardless (no upstream binary downloads)",
-        "Rust deps (napi-rs? ring? tokio?) compilability probe on aarch64-linux-android (M3.5 exit gate)",
+        "CLOSED 2026-11-03: upstream android-arm64 prebuilt EXISTS (@pnpm/exe.android-arm64@12.16.1 in npm optionalDependencies) - contrary to the 'most likely absent' expectation; policy unchanged: CI self-build regardless, no upstream binary downloads (C5)",
+        "Rust deps (napi-rs? ring? tokio?) compilability probe on aarch64-linux-android (M3.5 exit gate): upstream ships android-arm64 binaries via cross (NDK r25b image) and pnpm-cli bin has ZERO napi deps (napi is the separate pnpm-napi addon artifact) - full build probe in progress",
         "IF the premise is falsified (NAPI hybrid loaded by node): FREEZE this repo plan and re-evaluate as a pty-style node-paired artifact (NODE_MODULE_VERSION pairing + napi symbol resolution in the node-cli process)"
       ],
       "gates": {
@@ -34,7 +35,7 @@
         "pageAlign16k": true
       },
       "mavenCentral": {
-        "coordinates": "io.github.fellow99:pnpm-cli:12.0.0",
+        "coordinates": "io.github.fellow99:pnpm-cli:12.16.1",
         "published": false
       },
       "status": "draft"
