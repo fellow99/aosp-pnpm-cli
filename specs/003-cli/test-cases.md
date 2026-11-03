@@ -55,7 +55,31 @@
 |---|---|---|---|---|
 | TC-C13 | stdout/stderr 分离 | `$PNPM --version 1>/out.txt 2>/err.txt`（成功）与 `$PNPM bad-cmd 1>/o 2>/e`（失败） | 成功例：out 有内容、err 空；失败例：诊断流与成功流不混淆（如实记录 pnpm 实际流向） | ⬜ |
 
-## 执行记录
+## 执行记录（2026-11-03，测试阶段实测——模拟器 emulator-5554，API 37，x86_64 + arm64 翻译）
 
-（测试阶段回填：每条用例记录 exit code / 关键输出摘录 / 文件证据路径；预期失败用例注明
-「✅ 预期失败」；未执行条件项保持 ⬜ 并注明缺件（如 16KB 设备、node 产物））
+| # | 结果 | 证据（exit / 关键输出） |
+|---|---|---|
+| TC-C00 | ✅ | deploy 脚本 push+chmod+目录树+symlink；sha256 一致 `e5378cfa…98dd`；设备 x86_64/API 37 |
+| TC-C00b | ✅ | 裸 exec `--version` ⇒ `12.16.1`，EXIT=0（shell 域允许 exec，exec 型实证） |
+| TC-C01（**P1**） | ✅ | `--version`/`-v` ⇒ `12.16.1` = lock CLI_VERSION，exit=0；版本串回程齐全 |
+| TC-C02 | ✅ | `--help` 输出用法（`Usage: pnpm [OPTIONS] <COMMAND>` + 子命令表），exit=0 |
+| TC-C03 | ✅ | 未知命令 ⇒ **exit=1，诊断走 stderr**（stdout 空，流分离一并实证） |
+| TC-C04 | ✅（随 C05 间接） | 全程中文/emoji 无乱码；专项长输出用例随 C05 输出正常 |
+| TC-C05（**P7**） | ✅ | `pnpm add left-pad`：TLS 下载成功（resolved 1, downloaded 1, done 4.8s），exit=0；`node_modules/left-pad` 存在；**无证书错误 ⇒ rustls 自带根证书生效（R6 初步结论：无需 CA 注入）** |
+| TC-C06（**P2**） | ①⬜ ②✅ | ① **缺件：aosp-node-cli 的 `libnode_cli.so` 为 1024B 占位残品（未首产）**，完整回程待 node 产物；② 无 node 场景被**更早一层**拦截——见下「L1 增强」 |
+| TC-C07 | ✅ | `pnpm init` 生成 package.json，exit=0 |
+| TC-C08（**P3**） | ✅ | 案a XDG ⇒ `$XDG_DATA_HOME/pnpm/store/v11`；案b store-dir ⇒ `/data/local/tmp/pnpm-cli/store/v11` 且**持久化生效**（后续 add 实际落 store/v11）。两案均落注入可写目录、不落库区。**R5 定案：案b 显式可核验、随 config.yaml 持久化，推荐案b** |
+| TC-C09 | ✅（含口径修正） | config.yaml 落 `$HOME/.config/pnpm/`（HOME 基座生效）；⚠️ 新版 config set 仅接受受支持 YAML key（任意 key ⇒ ERR_PNPM_CONFIG_SET_UNSUPPORTED_YAML_CONFIG_KEY） |
+| TC-C10（**P5**） | ⚠️ **结论修正** | self-update **不会物理失败**：可写 HOME 下真实发起运行期下载 `@pnpm/exe.android-arm64`（C5 行为实锤）；原产物 sha256 前后一致（本体无部分写入）；二跑判定 already-latest exit=0。**D7「物理不可能」仅生产 AAR 场景（NLDIR 只读）成立**；消费方禁用必须靠环境约束+文档声明 |
+| TC-C11（**P4**） | ✅ 记录 | dlx cowsay 下载安装成功；执行 shim 时 `node: not found`（D5/L1 再证：dlx JS 工具依赖 PATH 上 node） |
+| TC-C13 | ✅ | 成功例 stdout 有内容 stderr 空；失败例诊断走 stderr（随 C03） |
+| TC-C14（L3） | ✅ 记录 | `pnpm add esbuild`：**postinstall（运行期平台 .so 下载）被默认构建脚本拦截层挡下**（ERR_PNPM_IGNORED_BUILDS）——非静默降级 ✅；esbuild JS 本体装上但二进制缺失 ⇒ 运行期必失败，能力边界声明成立 |
+| TC-C15（**P6**） | ⬜ | 无 16KB 页设备/镜像可用（C7 如实标注；产物对齐 0x4000 已由门禁⑦保证） |
+| TC-C16 | ✅ 记录 | 全部用例经 x86_64 翻译层执行，无翻译层崩溃/卡顿；性能足够（install 4.8s） |
+
+### 重大 as-built 发现（须回写消费方文档/规划）
+
+1. **L1 增强**：新版 pnpm（12 Rust 版）默认**拦截未批准构建脚本**（ERR_PNPM_IGNORED_BUILDS，help 指向 `pnpm approve-builds`）。P2 完整回程需要 **node 注入 + 构建脚本预授权（onlyBuiltDependencies/approve-builds）** 双条件；拦截发生在配置层，早于 node spawn。
+2. **P5 修正**：`self-update` 在可写 HOME+网络下**会真实运行期下载上游二进制**（首跑实测 23.55MB 下载启动；原产物不可被覆盖——sha256 不变）。D7 的「物理不可能」仅指生产 AAR 的 nativeLibraryDir 只读场景；**消费方文档必须显式声明：不得为 pnpm 提供可写 HOME + 网络的组合并依赖物理失败**。
+3. **R5 定案**：store 注入推荐**案b**（`pnpm config set store-dir`，显式、可 `store path` 回读、随 config.yaml 持久化）；案a（XDG_DATA_HOME）亦实测有效，作为无首启命令场景的兜底。
+4. **R6 初步结论**：TLS 直连 registry.npmjs.org 握手成功，无证书错误 ⇒ rustls webpki-roots 自带根证书，**无需** `npm_config_cafile` 注入（⬜ 正式结论随真机复测）。

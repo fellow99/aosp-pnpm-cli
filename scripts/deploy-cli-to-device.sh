@@ -10,6 +10,10 @@
 #
 # 退出码：0 成功 · 2 部署/校验失败 · 1 用法错误
 set -euo pipefail
+# Git Bash/MSYS 会把 "/data/..." 这类设备路径改写为 Windows 路径（MSYS 路径转换），
+# 必须对 adb 参数禁用转换（Linux 上该变量无副作用）
+export MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV=1
 
 ART=""; SERIAL=""
 while [[ $# -gt 0 ]]; do

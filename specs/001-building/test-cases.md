@@ -25,3 +25,12 @@
 - TC-B03 ✅：二次 fetch ⇒ 「已存在且版本一致」exit 0（幂等命中）。
 - 实现注记：解压用**纯 Node tar 解析器**（zlib + 512B 头 + pax path）——Windows 下 GNU tar 把 `D:\` 解释为远程主机、bsdtar 对 tarball 内 symlink 报 Can't create（无特权建链）；自解器跳过 symlink/hardlink（本次 6 个，均为上游 .claude/fixtures 装饰链接，不参与构建），清单记录于 FETCH-METADATA.json `skippedLinks`（C1 可审计）。
 - TC-B04…B08：⬜ 待交叉编译完成（cargo-ndk 安装中）。
+
+## 执行记录（2026-11-03，交叉编译经 GitHub Actions run 41568096296 实测 ✅ 全绿）
+
+- TC-B04 ✅（C1 不改源）：BUILD-METADATA `source-tree=unmodified`；交叉参数经 RUSTFLAGS/cargo-ndk 注入（源树外）；fetch 自解器只读解压。
+- TC-B05 ✅（**门禁首产正样本**，即 overall TC-EXT-06 inspect 面）：CI 日志 provision 报告七行全 ✔——①ET_DYN ②PT_INTERP=1 个且 = /system/bin/linker64 ③AArch64(183) ④DT_NEEDED=[libdl,libm,libc] 全在白名单（**libc++_shared.so 未出现**）⑤⑥ draft 只记录 ⑦ min LOAD align=0x4000；「门禁：全过」。
+- TC-B06 ✅（元数据四件）：归档内 BUILD-METADATA.txt / FETCH-METADATA.json / LICENSES-cargo.txt / Cargo.lock 齐备；BUILD-METADATA 实值：rustc 1.97.0、cargo-ndk 4.1.2、NDK 28.2.13676358、16KB link-arg、size=47317088、sha256=e5378cfa…98dd、cargo-lock sha256=ef2eb07f…。
+- TC-B07 ✅（lock 实值回写核对）：size/sha256 取自 CI 构建输出（`sha256sum`/`stat` 等价命令），已回写本仓 lock（draft 态 ⑤⑥ 下轮投放比对生效）。
+- TC-B08 ✅（探针①② 结论回写）：①CLOSED（上游存在 @pnpm/exe.android-arm64，有也不用仍自建）；②CLOSED——**全部依赖在 aarch64-linux-android 可编**（编译 17m42s 完成，零 feature 裁剪、零源码补丁）；**③ 前提确认成立**：PT_INTERP 恰 1 个 ⇒ 独立进程二进制（非 NAPI 形态），C8 无需触发。
+- 首产历程（3 轮 CI）：run 41563075234 编译成功但 TARGET_DIR 相对路径错位 → run 41565505469 license 重定向同类错位（归档按 FR-002-013 硬失败，行为正确）→ run 41568096296 全绿。两处修复均已 commit（路径绝对化）。

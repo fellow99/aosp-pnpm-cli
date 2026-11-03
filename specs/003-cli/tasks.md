@@ -3,12 +3,12 @@
 > 对应：[spec.md](./spec.md)。原则：先载体后用例；红线用例（self-update）必跑；
 > ⬜ 条件项（16KB、node 产物）缺环境时如实标注不硬凑（C7）。
 
-- [ ] T0 测试载体搭建：adb 设备确认（真机优先，否则模拟器）→ push 产物 + chmod 755 + HOME/TMPDIR/XDG/bin 目录树 + `pnpm` symlink
-- [ ] T1 基础行为用例（TC-C01…C04）：version/help/错误退出码/UTF-8 流分离
-- [ ] T2 网络用例（TC-C05/12）：TLS install 纯 JS 包 + registry 透传；根证书行为记录（R6）
-- [ ] T3 lifecycle 回程（TC-C06）：node 注入 PATH（aosp-node-cli 产物或等价 node ⬜）；缺席场景记录 L1 证据
-- [ ] T4 store 用例（TC-C08/09）：方式 a/b 双案实测 → R5 定案结论回写规划 §7 + 本模块 plan
-- [ ] T5 红线用例（TC-C10/14）：self-update 失败路径 + 平台二进制包行为记录
-- [ ] T6 附加用例（TC-C07/11/13/16）：init/dlx/长输出/arm 翻译记录
-- [ ] T7 16KB 条件用例（TC-C15）：有 16KB 设备则跑，无则 ⬜ 登记
-- [ ] T8 汇总：测试报告（exit/输出/文件证据逐条）+ 结论回写（规划 §7 R5/R6、README 已知限制）；提交（父工程不提交）
+- [x] T0 测试载体搭建 ✅（emulator-5554 API 37；deploy 脚本 + MSYS 路径转换修复；sha256 一致）
+- [x] T1 基础行为用例（TC-C01…C04）✅（P1 版本回程 12.16.1；C03 exit=1 走 stderr）
+- [x] T2 网络用例（TC-C05/12）✅（TLS install 成功 4.8s；R6 初步结论 rustls 自带证书；registry 透传为既有机制未单独断言——⬜ 可选补测）
+- [x] T3 lifecycle 回程（TC-C06）⚠️ ①⬜（node 产物缺件：aosp-node-cli 未首产）②✅（L1 增强发现：默认拦截构建脚本）
+- [x] T4 store 用例（TC-C08/09）✅（R5 定案：两案均有效，推荐案b；HOME 基座生效）
+- [x] T5 红线用例（TC-C10/14）✅（P5 结论修正：self-update 会下载不物理失败；esbuild postinstall 被默认拦截层挡下——非静默）
+- [x] T6 附加用例（TC-C07/11/13/16）✅（init/dlx+node-not-found/流分离/翻译层全记录）
+- [x] T7 16KB 条件用例（TC-C15）⬜（无 16KB 设备/镜像，C7 如实登记；对齐 0x4000 已由门禁⑦保证）
+- [x] T8 汇总 ✅（测试报告=003/test-cases.md 执行记录节；结论已回写规划 §7/§7.1/R5/R6；提交）
