@@ -87,9 +87,12 @@ echo "[build] cargo-ndk=$CARGO_NDK_VER"
 mkdir -p "$OUT"
 OUT_FWD="$OUT"; SRC_FWD="$SRC"
 command -v cygpath >/dev/null 2>&1 && { OUT_FWD="$(cygpath -u "$OUT")"; SRC_FWD="$(cygpath -u "$SRC")"; }
-# TARGET_DIR 必须绝对化：构建子 shell 会 cd 进源码树，相对路径会把 target
-# 落到 <源码树>/…/target（CI 首跑实证的产物路径错位根因）
-TARGET_DIR="$(cd "$OUT_FWD" && pwd)/target"
+# OUT_FWD/SRC_FWD/TARGET_DIR 全部绝对化：构建与重定向子 shell 会 cd 进源码树，
+# 相对路径会把产物写到 <源码树>/… 下（CI run 41563075234 产物错位、
+# 41565505469 license 重定向即时失败——同一根因两处实证）
+OUT_FWD="$(cd "$OUT_FWD" && pwd)"
+SRC_FWD="$(cd "$SRC_FWD" && pwd)"
+TARGET_DIR="$OUT_FWD/target"
 echo "[build] target-dir=$TARGET_DIR"
 
 # —— ① 依赖盘点（快路径）：Cargo.lock 副本 + 整文件 sha256（粒度 a，规划 §4.2）——
@@ -117,7 +120,7 @@ echo "[build] rustc(实际生效)=$RUSTC_ACTUAL"
 
 # —— ③ 依赖许可清单（构建后跑：registry 缓存就绪；180s 超时防网络挂起）——
 echo "[build] cargo license 清单 …"
-if ( cd "$SRC_FWD" && timeout 180 cargo license --avoid-dev-deps > "$OUT_FWD/LICENSES-cargo.txt" 2>"$OUT_FWD/.license-err.log" ); then
+if ( cd "$SRC_FWD" && timeout 300 cargo license --avoid-dev-deps > "$OUT_FWD/LICENSES-cargo.txt" 2>"$OUT_FWD/.license-err.log" ); then
   echo "[build] 许可清单: $OUT/LICENSES-cargo.txt"
 else
   echo "[build] ⚠ cargo-license 失败/超时（不阻塞产物；归档前需补跑）" >&2
