@@ -90,3 +90,13 @@
 - 全部 PASS：C00（NLDIR 唯一原生件+size 落锁值）/ C00b（裸环境直启）/ C01/C01b（12.16.1 回程）/ C02 / C03（stderr 分流）/ C04（中文/emoji UTF-8 回程）/ C07（init）/ C08a+C09+C08b（**store 双案 App 内复验，R5 定案再证**）/ C05（TLS install）/ C06b（core-js 默认拦截）/ C14（esbuild 拦截非静默）/ **C10（self-update 后本体 sha256 前后一致——P5 红线在 App 场景实证）** / C11（dlx RECORD）/ C16（翻译层记录）
 - BLOCKED：C06a（node 缺件，aosp-node-cli 未首产）/ C15（无 16KB 设备，对齐已由门禁⑦保证）
 - 发布联动：全绿后打 tag `v12.16.1` → CI run 41733024700 success → **GitHub Release 生成**（https://github.com/fellow99/aosp-pnpm-cli/releases/tag/v12.16.1，tar.gz 22,719,556B + .sha256 双 assets）→ lock `status=released`（002-T6 runbook 收尾，**G1/G4 达成**）
+
+### TC-C06a 解封与 P2 完整回程（2026-11-04，adb 层实测 ✅）
+
+node-cli 首产 v26.13.0（`libnode_cli.so` 62,155,912B / sha256 `eb51b439…` 与其 lock **逐字节核对一致**，GitHub Release `node-cli-v26.13.0` 下载）后重测：
+
+- **TC-C06a ✅ PASS（P2 完整回程实证）**：mini 本地包（install 脚本=`node -e` 输出 `LIFECYCLE-RAN node=<ver>` 并落盘）经 `pnpm add file:./mini-pkg.tgz` 安装——stdout 出现 `install: LIFECYCLE-RAN node=v26.13.0` + `LIFECYCLE-OK.txt=node-ran-script` 落盘，EXIT=0。**pnpm → sh → node → script 全链闭环，双重可证伪证据。**
+- 过程发现（as-built，已回写规划 §7.1 P2）：
+  1. 预授权唯一生效路径 = **`pnpm approve-builds [pkg]` / `--all`**（非交互可用）；`config.yaml` / `package.json` 的 `onlyBuiltDependencies` 不被 Rust 版采纳（写了不生效，实测三连败）。
+  2. **模拟器翻译层 exec 包装器拒绝 symlink 形态的 arm64 ELF**（`Unable to get realpath of <名>`——argv[0] 相对 realpath 失败）；sh 脚本 shim（`exec <NLDIR 绝对路径> "$@"`）可用。⇒ node 注入生产（真机）用 symlink farm（规划 §4.3 原设计），模拟器（shell 域）用 shim 脚本；App 进程域两者皆受限（W^X 禁 filesDir 脚本 + 翻译层禁 symlink）⇒ App 内 P2 ⬜ 真机复测。
+- 环境注记：arm64 镜像在本 x86_64 主机不可启动（emulator 不支持跨架构 QEMU），P2 于翻译层执行（C7 如实记录）。

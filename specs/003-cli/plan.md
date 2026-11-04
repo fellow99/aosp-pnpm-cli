@@ -18,7 +18,7 @@
 | 部署点 | `/data/local/tmp/pnpm-cli/libpnpm_cli.so`（chmod 755；shell 域允许 exec） | ⬜ |
 | HOME/TMPDIR | `/data/local/tmp/pnpm-cli/home`、`/data/local/tmp/pnpm-cli/tmp`（filesDir 语义等价：可写、非库目录） | ⬜ |
 | store 注入 | 方式 a：`XDG_DATA_HOME=/data/local/tmp/pnpm-cli/xdg`；方式 b：`pnpm config set store-dir`（P3 双案实测后定案回写规划 §7） | ⬜ |
-| node（P2 用） | PATH 注入 aosp-node-cli 产物（`libnode_cli.so` 改名 `node` 或 symlink）；不可得 ⇒ P2 用例按 L1 记录「预期失败」 | ⬜ 依赖同工作区产物 |
+| node（P2 用） | PATH 注入 aosp-node-cli 产物——**✅ 已首产 v26.13.0**（sha256 `eb51b439…` 与 node-cli lock 逐字节核对；模拟器上须用 **sh 脚本 shim**（`exec <NLDIR 绝对路径> "$@"`），symlink 被翻译层 exec 包装器拒绝——见规划 §7.1 P2 发现②） | ✅ adb 层完整回程通过（2026-11-04） |
 | libc++（若 DT_NEEDED） | `libc++_shared.so` 随测 push 到同目录 + `LD_LIBRARY_PATH`（模拟 node-runtime 供给，D6） | ⬜ 以 001 门禁④ 实测清单为准 |
 | TLS（P7） | 直连 registry.npmjs.org；根证书行为（rustls webpki-roots 自带 vs 需 `npm_config_cafile`）实测记录 | ⬜ |
 
