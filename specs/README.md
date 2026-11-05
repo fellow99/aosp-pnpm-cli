@@ -1,10 +1,10 @@
 # 规格文档索引 —— `aosp-pnpm-cli`
 
 **项目名称：** `aosp-pnpm-cli`（Maven 坐标 `io.github.fellow99:pnpm-cli`，当前 draft `12.0.0`）
-**需求：** **000-scaffold 工程搭建** · 规范文档存放目录：`specs/`
+**需求：** **000-scaffold 工程搭建**（模块化扩展：001/002/003 已按规划 §10.2 立项；101-probe-app 于 2026-11-05 as-built 归档）· 规范文档存放目录：`specs/`
 **库形态：** 纯二进制 AAR——Android 版 `pnpm` 命令行（pnpm 12+ Rust 独立二进制，arm64-v8a，exec 型 PIE，`libpnpm_cli.so`）；仓库只含**可复现构建、exec 门禁与发布流水线**，不含任何嵌入 API
 **技术栈：** Gradle 9.4.1 + AGP 9.2.1 + vanniktech 0.37.0（发布面）+ 纯 Node ESM 工具链（provision 门禁/投放）+ ⬜规划：rust `aarch64-linux-android` + cargo-ndk（M3.5）
-**文档生成时间：** 2026-11-02 · **状态：** M0 骨架已完成；M3.5（交叉编译/首产/真实 CI）未开工
+**文档生成时间：** 2026-11-02 · **最后更新：** 2026-11-05（101-probe-app as-built 归档批次）· **状态：** M0 骨架已完成；M3.5（交叉编译/首产/真实 CI）未开工
 
 > **权威规划文档是 [`../docs/000-工程规划.md`](../docs/000-工程规划.md)（v2.0，含 D1–D8 决策与 M3.5 实现设计）。**
 > 本目录是它的**收敛/展开版**：只做细化与验收，**不复制粘贴**，所有结论回引规划 § 号。
@@ -20,8 +20,9 @@
 | 模块 | 001-building（构建） | 4 | spec/plan/tasks/test-cases（2026-11-03 立项，规划 §4 / M3.5-T1…T5） |
 | 模块 | 002-building-workflow（构建流水线） | 4 | spec/plan/tasks/test-cases（2026-11-03 立项，规划 §9/§10.1 / M3.5-T6） |
 | 模块 | 003-cli（CLI 本体） | 4 | spec/plan/tasks/test-cases（2026-11-03 立项，规划 §7/§7.1 / M3.5-T7；CLI 主用例 TC-C00…C16） |
+| 模块 | 101-probe-app（设备回程探针载体） | 4 | spec/plan/tasks/test-cases（2026-11-05 as-built 归档；逆向既有 19 条探针 + autorun 无头触发） |
 | 索引 | 本索引 | 1 | `README.md` |
-| **合计** | **6 目录 / 25 文件** | | 模块目录 4 个 |
+| **合计** | **7 目录 / 29 文件** | | 模块目录 5 个 |
 
 > **刻意不生成** `API.md` / `overall-api.md` / `overall-data-model.md`：本仓不含任何嵌入 API（AAR 无 Kotlin/Java 源）；唯一数据实体 `pnpm-cli.lock.json` 的逐字段模型在 [`000-scaffold/plan.md`](./000-scaffold/plan.md) §3。
 
@@ -100,6 +101,20 @@
 | 技术方案 | [003-cli/plan.md](./003-cli/plan.md) | 测试载体（部署点/env 注入/双 store 案）、P1–P7→用例映射、设计决策 |
 | 任务拆解 | [003-cli/tasks.md](./003-cli/tasks.md) | T0–T8（先载体后用例；红线用例必跑） |
 | 测试用例 | [003-cli/test-cases.md](./003-cli/test-cases.md) | **TC-C00…C16 CLI 主用例全集**（P1–P7 映射 + version/help/退出码/UTF-8/install/lifecycle/store/self-update/dlx/透传/流分离） |
+
+### 101-probe-app — 设备回程探针载体（probe-app）⚠️ 已实现（as-built 归档 2026-11-05）
+
+> 独立 Android app（`probe-app/`）承载 003-cli 用例正典 TC-C00…C16 的 App 内可执行子集：
+> env 注入（HOME/TMPDIR/XDG/PATH/LD_LIBRARY_PATH）+ 直接 exec `libpnpm_cli.so`（D8 纯二进制，
+> 无 assets 物化）+ PASS/FAIL/BLOCKED/JSON 报告；本批加 `--ez autorun true` 无头触发（统一测试队列）。
+> **pnpm 不补探针**，registry 注入为环境配置范围外；设备跑批 ⬜ 由编排者统一排队。
+
+| 文档 | 链接 | 说明 |
+|---|---|---|
+| 功能规格 | [101-probe-app/spec.md](./101-probe-app/spec.md) | FR-101-PROBE-001…009（载体就绪/注入/执行器/判据/报告/store 双案/P5 红线/诚实习标/无头自动化） |
+| 技术方案 | [101-probe-app/plan.md](./101-probe-app/plan.md) | as-built：真实文件与行号、注入模板、判据形态、构建部署命令、FR 交叉引用 |
+| 任务拆解 | [101-probe-app/tasks.md](./101-probe-app/tasks.md) | T1 建仓 / T2 正典映射与既有跑批 / T3 本批归档+autorun+构建验证 / T4 遗留执行项 |
+| 测试用例 | [101-probe-app/test-cases.md](./101-probe-app/test-cases.md) | **探针主用例全表 19 条**（TC-C00…C16）+ host 用例 + 事实记录区 + 禁止判据 |
 ---
 
 ## 四、模块编号一览
@@ -110,11 +125,12 @@
 | 001 | 构建 | building | 构建 | 规划 §4 / §10.2（M3.5-T1…T5） | ⬜ 规格已立（2026-11-03），待实现 |
 | 002 | 构建流水线 | building-workflow | 构建/发布 | 规划 §9 / §10.1 / §10.2（M3.5-T6） | ⬜ 规格已立（2026-11-03），待实现 |
 | 003 | CLI 本体 | cli | 运行期验证 | 规划 §7 / §7.1 / §10.2（M3.5-T7） | ⬜ 规格已立（2026-11-03），待执行 |
+| 101 | 探针载体（probe-app） | probe-app | 设备侧集成 | 规划 §10.2（M3.5-T7 载体）· [`101-probe-app/`](./101-probe-app/) | ⚠️ 已实现（as-built 归档 2026-11-05；设备跑批 ⬜） |
 | — | Maven Central 发布 | （两段式第二段） | 发布 | 规划 §10.1（M4） | ⬜ 规划（随 002 扩展，出现独立边界再编号） |
 
-> 编号约定（2026-11-03 更新）：M3.5 里程碑工作已按规划 §10.2 拆分至 001/002/003 三个模块目录
-> （「出现独立可验收的模块边界即按 `NNN-<名>` 扩展」的首次执行）；M4 暂不拆分。
-
+> 编号约定（2026-11-05 更新）：M3.5 里程碑工作已按规划 §10.2 拆分至 001/002/003 三个模块目录
+> （「出现独立可验收的模块边界即按 `NNN-<名>` 扩展」的首次执行）；`0NN` = 构建工程/产品域（000–003），
+> `1NN` = 设备侧集成域（101 起，本模块 = 探针载体）；M4 暂不拆分。
 ---
 
 ## 五、快速导航
