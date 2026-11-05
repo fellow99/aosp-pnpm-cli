@@ -3,6 +3,7 @@ package org.fellow99.pnpmprobe;
 import android.app.Activity;
 import android.os.Bundle;
 import android.os.Handler;
+import android.content.Intent;
 import android.os.Looper;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -81,11 +82,14 @@ public class MainActivity extends Activity {
         setContentView(root);
         log("probe-app ready\nnativeDir=" + nativeDir
                 + "\n被测 pnpm 12.16.1（D8 纯二进制：无 assets 物化步骤）\n"
-                + "启动 1s 后自动执行全部探针（亦可点按钮）");
-        // 自动执行：adb shell am start 即可无人值守跑完（测试阶段 pull 报告即可）
+                + "启动 1s 后自动执行全部探针（--ez autorun true 无头触发，亦可点按钮）");
+        // 无头触发（统一测试队列，对齐 aosp-git-cli）：adb shell am start ... --ez autorun true
+        // 缺省行为保留：启动 1s 后自动执行全部探针（am start 即可无人值守跑完，pull 报告即可）
+        Intent in = getIntent();
+        boolean autorun = in != null && in.getBooleanExtra("autorun", false);
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             if (!ran) runAll();
-        }, 1000);
+        }, autorun ? 0 : 1000);
     }
 
     private void log(String s) {
