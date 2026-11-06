@@ -100,3 +100,18 @@ node-cli 首产 v26.13.0（`libnode_cli.so` 62,155,912B / sha256 `eb51b439…` �
   1. 预授权唯一生效路径 = **`pnpm approve-builds [pkg]` / `--all`**（非交互可用）；`config.yaml` / `package.json` 的 `onlyBuiltDependencies` 不被 Rust 版采纳（写了不生效，实测三连败）。
   2. **模拟器翻译层 exec 包装器拒绝 symlink 形态的 arm64 ELF**（`Unable to get realpath of <名>`——argv[0] 相对 realpath 失败）；sh 脚本 shim（`exec <NLDIR 绝对路径> "$@"`）可用。⇒ node 注入生产（真机）用 symlink farm（规划 §4.3 原设计），模拟器（shell 域）用 shim 脚本；App 进程域两者皆受限（W^X 禁 filesDir 脚本 + 翻译层禁 symlink）⇒ App 内 P2 ⬜ 真机复测。
 - 环境注记：arm64 镜像在本 x86_64 主机不可启动（emulator 不支持跨架构 QEMU），P2 于翻译层执行（C7 如实记录）。
+
+### TC-C06a App 域真机复测（2026-11-07，Xiaomi Mi MIX 原生 arm64 ✅）
+
+node-cli 最新 Release v26.13.0 真实产物（`libnode_cli.so` 100,037,408B / sha256
+`ac5911ef…` 与 aosp-node-cli `node-cli.lock.json` 逐字一致，经 api.github.com assets 端点下载）
+注入 pnpm 探针 `jniLibs/arm64-v8a/`（nativeLibraryDir）；HOME/bin 建 symlink
+`node → nativeLibraryDir/libnode_cli.so`（规划 §4.3 symlink farm，原生 arm64 无翻译层
+exec 包装器限制 ⇒ 原设计成立）：
+
+- **TC-C06a ✅ PASS-FACT（App 域 P2 完整回程）**：`pn add file:./mini-pkg.tgz` 首轮被
+  `ERR_PNPM_IGNORED_BUILDS` 拦截（pnpm 12 默认拦截全部 build scripts，含本地包——与 adb 层
+  记录一致）→ `pnpm approve-builds --all` + `pnpm rebuild` 强制重跑 → stdout 出现
+  `LIFECYCLE-RAN node=v26.13.0` + `LIFECYCLE-OK.txt=node-ran-script` 落盘，EXIT=0。
+  **pnpm → sh → node → script 全链闭环 App 进程域实证（双重可证伪证据）。**
+- 全批：18 PASS / 0 FAIL / 1 BLOCKED（C15 16KB 页设备，环境类；logs/20261106-7d/report.json）。

@@ -198,6 +198,18 @@ public class MainActivity extends Activity {
 
     private static String head(String s) { return head(s, 160); }
 
+    private static String readText(File f) {
+        try (BufferedReader r = new BufferedReader(
+                new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line).append('\n');
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     private static String head(String s, int n) {
         if (s == null) return "";
         s = s.replace("\n", "\\n");
@@ -244,16 +256,20 @@ public class MainActivity extends Activity {
         File so = new File(pnpmExe);
 
         // ── 载体与环境 ──
-        l.add(new Probe("TC-C00", "载体就绪（NLDIR 物理落盘 + 唯一原生件）",
+        l.add(new Probe("TC-C00", "载体就绪（NLDIR 物理落盘 + 原生件集）",
                 null, null, 5_000,
                 o -> {
                     // argv=null：纯文件面检查（不入 exec）
                     if (!so.isFile()) return "本体缺失: " + pnpmExe;
                     if (so.length() != 47317088L) return "size=" + so.length() + "（期望 47317088=lock 落锁值）";
+                    File node = new File(nativeDir, "libnode_cli.so");
+                    if (!node.isFile()) return "node 缺件(nativeLibraryDir/libnode_cli.so 未注入): " + node;
+                    if (node.length() != 100037408L) return "libnode_cli.so size=" + node.length()
+                            + "（期望 100037408=aosp-node-cli lock 落锁值）";
                     String[] nl = new File(nativeDir).list();
                     int soCount = 0;
                     if (nl != null) for (String f : nl) if (f.endsWith(".so")) soCount++;
-                    if (soCount != 1) return "NLDIR .so 数=" + soCount + "（期望 1：兄弟文件唯一）";
+                    if (soCount != 2) return "NLDIR .so 数=" + soCount + "（期望 2：libpnpm_cli.so + libnode_cli.so）";
                     return null;
                 }));
         l.add(new Probe("TC-C00b", "exec 权限语义（裸环境直启，无 HOME/TMPDIR 注入）",
@@ -326,9 +342,32 @@ public class MainActivity extends Activity {
                         return "node_modules/left-pad 缺失（TLS/store 链路不完整）";
                     return null;
                 }));
-        l.add(new Probe("TC-C06a", "lifecycle 完整回程（P2①）：需 PATH 上 node",
-                null, null, 5_000,
-                o -> "BLOCKED:node 缺席（aosp-node-cli 未首产，libnode_cli.so 为占位残品）——完整回程待 node 产物"));
+        l.add(new Probe("TC-C06a", "lifecycle 完整回程（P2①）：pnpm→sh→node→script",
+                pn("add", "file:./mini-pkg.tgz"), null, 300_000,
+                o -> {
+                    String all = o.stdout + "\n" + o.stderr;
+                    File ok = new File(workDir, "LIFECYCLE-OK.txt");
+                    // pnpm 12 默认拦截全部 build scripts（含本地包）；预授权唯一生效路径 =
+                    // pnpm approve-builds（spec 003-cli 记录）。首轮 add 被 IGNORED_BUILDS 拦截属预期：
+                    if (o.exit != 0 && all.contains("IGNORED_BUILDS")) {
+                        Out ap = exec(pn("approve-builds", "--all"), baseEnv(), workDir, 60_000);
+                        if (ap.exit != 0) return "FAIL:approve-builds exit=" + ap.exit
+                                + " err=" + head(ap.stderr);
+                        Out re = exec(pn("rebuild"), baseEnv(), workDir, 300_000);
+                        String reAll = re.stdout + "\n" + re.stderr;
+                        boolean ran = reAll.contains("LIFECYCLE-RAN node=v26.13.0");
+                        boolean mark = ok.isFile() && readText(ok).trim().equals("node-ran-script");
+                        if (!ran) return "FAIL:重装后无 LIFECYCLE-RAN（approve 生效但 script 未跑）：exit="
+                                + re.exit + " out=" + head(re.stdout, 200) + " err=" + head(re.stderr, 200);
+                        if (!mark) return "FAIL:LIFECYCLE-OK.txt 未落盘/内容不符: " + ok;
+                        return "PASS-FACT|pnpm→sh→node→script 全链闭环（approve-builds→重装，mark=" + mark + "）";
+                    }
+                    if (o.exit == 0 && all.contains("LIFECYCLE-RAN node=v26.13.0")
+                            && ok.isFile() && readText(ok).trim().equals("node-ran-script")) {
+                        return "PASS-FACT|pnpm→sh→node→script 全链闭环（首轮可执行，mark=true）";
+                    }
+                    return "FAIL:exit=" + o.exit + " out=" + head(o.stdout, 200) + " err=" + head(o.stderr, 200);
+                }));
         l.add(new Probe("TC-C06b", "lifecycle 无预授权拦截（P2②/L1 增强）：core-js 默认拦截",
                 pn("add", "core-js"), null, 300_000,
                 o -> o.exit != 0 && (o.stderr.contains("IGNORED_BUILDS") || o.stdout.contains("IGNORED_BUILDS"))
@@ -393,6 +432,9 @@ public class MainActivity extends Activity {
                 }
                 // TC-C07 前置：独立 init 目录（避免覆盖 work/package.json）
                 initDir.mkdirs();
+                // TC-C06a 前置：node symlink farm（HOME/bin/node → NLDIR/libnode_cli.so）+ mini-pkg.tgz
+                buildNodeFarm();
+                buildMiniPkg();
 
                 int pass = 0, fail = 0, blocked = 0;
                 for (Probe p : probes()) {
@@ -456,4 +498,43 @@ public class MainActivity extends Activity {
             }
         }).start();
     }
+
+    // ── TC-C06a 前置：node symlink farm + mini-pkg.tgz（P2 完整回程）─────────────────
+
+    /** 建 HOME/bin/node 符号链接 → nativeLibraryDir/libnode_cli.so（规划 §4.3 symlink farm）。 */
+    private void buildNodeFarm() throws Exception {
+        File bin = new File(homeDir, "bin");
+        if (!bin.isDirectory() && !bin.mkdirs()) throw new java.io.IOException("mkdir bin 失败");
+        File link = new File(bin, "node");
+        if (link.exists() || java.nio.file.Files.isSymbolicLink(link.toPath())) java.nio.file.Files.delete(link.toPath());
+        java.nio.file.Files.createSymbolicLink(link.toPath(),
+                new File(nativeDir, "libnode_cli.so").toPath());
+        log("node farm: " + link + " -> " + new File(nativeDir, "libnode_cli.so"));
+    }
+
+    /** 生成 mini-pkg.tgz（install 脚本 = node -e 输出 LIFECYCLE-RAN 并落盘标记）。 */
+    private void buildMiniPkg() throws Exception {
+        File pkgDir = new File(workDir, "mini-pkg");
+        if (pkgDir.isDirectory()) deleteRecursive(pkgDir);
+        if (!pkgDir.mkdirs()) throw new java.io.IOException("mkdir mini-pkg 失败");
+        String okPath = new File(workDir, "LIFECYCLE-OK.txt").getAbsolutePath();
+        String install = "node -e \"console.log('LIFECYCLE-RAN node='+process.version);"
+                + "require('fs').writeFileSync('" + okPath + "','node-ran-script')\"";
+        // JSON 字符串值内联的双引号必须转义（package.json 语法），否则 tarball 解析失败
+        String installJson = install.replace("\\", "\\\\").replace("\"", "\\\"");
+        String pkgJson = "{\"name\":\"mini-pkg\",\"version\":\"1.0.0\",\"scripts\":{\"install\":\"" + installJson + "\"}}";
+        try (java.io.FileOutputStream os = new java.io.FileOutputStream(new File(pkgDir, "package.json"))) {
+            os.write(pkgJson.getBytes(StandardCharsets.UTF_8));
+        }
+        // toybox tar 打 tgz（workDir 下执行，产出 workDir/mini-pkg.tgz）
+        Process p = new ProcessBuilder("/system/bin/toybox", "tar", "-czf",
+                new File(workDir, "mini-pkg.tgz").getAbsolutePath(), "-C", workDir.getAbsolutePath(), "mini-pkg")
+                .redirectErrorStream(true).start();
+        java.io.InputStream is = p.getInputStream();
+        byte[] buf = new byte[4096];
+        while (is.read(buf) > 0) { /* drain */ }
+        if (p.waitFor() != 0) throw new java.io.IOException("toybox tar 失败 rc=" + p.exitValue());
+        log("mini-pkg.tgz: " + new File(workDir, "mini-pkg.tgz").length() + "B");
+    }
 }
+
