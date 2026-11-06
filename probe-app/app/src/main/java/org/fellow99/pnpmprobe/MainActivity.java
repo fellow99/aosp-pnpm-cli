@@ -118,6 +118,16 @@ public class MainActivity extends Activity {
         String failReason; // 启动失败等
     }
 
+    /** 递归删除（探针可重复性：清上一轮 run 落盘的残留状态）。 */
+    private void deleteRecursive(File f) {
+        if (f == null || !f.exists()) return;
+        if (f.isDirectory()) {
+            File[] c = f.listFiles();
+            if (c != null) for (File x : c) deleteRecursive(x);
+        }
+        f.delete();
+    }
+
     private Out exec(List<String> argv, Map<String, String> envIn, File cwd, long timeoutMs) {
         Out o = new Out();
         long t0 = System.currentTimeMillis();
@@ -366,6 +376,13 @@ public class MainActivity extends Activity {
                 soShaBefore = sha256(so);
                 log("── 前置准备 ──");
                 log("本体 sha256=" + soShaBefore);
+                // 状态清理（探针可重复性）：adb install -r 不清 App 数据，上一轮 run 的落盘状态会
+                // 残留——TC-C07 的 init 目录 package.json（ERR_PNPM_PACKAGE_JSON_EXISTS）、TC-C09
+                // 持久化的 store-dir 配置（污染 TC-C08a 案 a 的 XDG 兜底判据）、TC-C05/C06b/C14 的
+                // node_modules 等。每题开头清空 ⇒ 每轮从确定性状态起跑。
+                for (File d : new File[]{homeDir, tmpDir, xdgDir, storeDir, initDir, workDir}) {
+                    deleteRecursive(d);
+                }
                 // TC-C04 前置：work/package.json（中文 description + utf8 脚本）
                 workDir.mkdirs();
                 try (java.io.OutputStream os = new java.io.FileOutputStream(new File(workDir, "package.json"))) {
